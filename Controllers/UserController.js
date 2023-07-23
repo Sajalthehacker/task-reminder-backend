@@ -4,33 +4,55 @@ const bcryptjs = require('bcryptjs')
 
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, {
-        expiresIn: "2d",
+        expiresIn: "1d",
     });
 }
+
+// if token is expired after 1 day then getCurrentUserData() controller will not be able to fetch the data 
 
 const getCurrentUserData = async (req, res) => {
     const { token } = req.body;
 
     try {
-        const isTokenCorrect = jwt.verify(token, process.env.JWT_SECRET);
-        const userID = isTokenCorrect.id;
+        const isTokenCorrect = jwt.verify(token, process.env.JWT_SECRET, (err, data) => {
+            if (err) {
+                return {
+                    status: "TOKEN_EXPIRED",
+                    message: err
+                }
+            }
+            return {
+                status: "TOKEN_VALID",
+                message: data
+            }
+        });
+
+        if (isTokenCorrect.status === "TOKEN_EXPIRED") {
+            return res.json({
+                status: "TOKEN_EXPIRED",
+                message: isTokenCorrect.message
+            })
+        }
+
+        const userID = isTokenCorrect.message.id;
 
         const dbdata = await UserModel.findOne({ _id: userID });
 
         if (dbdata) {
             return res.json({
                 status: "DATA_FETCHED_SUCCESSFULLY",
-                data1: dbdata, 
+                data1: dbdata,
                 data2: isTokenCorrect,
             });
         } else {
             return res.json({
                 status: "INVALID_TOKEN",
-                data1: dbdata, 
+                data1: dbdata,
                 data2: isTokenCorrect,
             });
         }
-    } catch (error) {
+    }
+    catch (error) {
         return res.json({
             status: "ERROR_OCCURED",
             message: error.message,
@@ -127,7 +149,6 @@ const registerController = async (req, res) => {
         }
     }
     catch (error) {
-        console.log(error.message)
         return res.json({
             status: "ERROR_OCCURED",
             message: error.message
@@ -135,4 +156,79 @@ const registerController = async (req, res) => {
     }
 }
 
-module.exports = { loginController, registerController, getCurrentUserData }
+const forgotPasswordController = async (req, res) => {
+    const { email } = req.body
+
+    try {
+        const isUserExists = await UserModel.findOne({ email });
+
+        if (!isUserExists) {
+            return res.json({
+                status: "NO_ACCOUNT_EXISTS",
+                message: "No Account Exists with this email address please enter valid email address or proceed to SignUp page"
+            })
+        }
+
+        const forgotSecret = process.env.JWT_SECRET + isUserExists.password;
+        const forgotToken = jwt.sign({ email: isUserExists.email, id: isUserExists._id }, forgotSecret, {
+            expiresIn: "10m"
+        })
+
+        const forgotPasswordLink = `http://localhost:5000/api/user/reset-password/${isUserExists._id}/${forgotToken}`
+
+        res.send(forgotPasswordLink)
+
+    }
+    catch (error) {
+        return res.json({
+            status: "ERROR_OCCURED",
+            message: error.message
+        })
+    }
+}
+
+const resetPasswordController = async (req, res) => {
+    const { id, token } = req.params
+    const isUserExists = await UserModel.findOne({ _id: id });
+
+    if (!isUserExists) {
+        return res.json({
+            status: "NO_ACCOUNT_EXISTS",
+            message: "No Account Exists with this email address please enter valid email address or proceed to SignUp page"
+        })
+    }
+
+    const forgotSecret = process.env.JWT_SECRET + isUserExists.password;
+    try {
+        const isTokenValid = jwt.verify(token, forgotSecret, (err, data) => {
+            if (err) {
+                return {
+                    status: "TOKEN_EXPIRED",
+                    message: err
+                }
+            }
+            return {
+                status: "TOKEN_VALID",
+                message: data
+            }
+        })
+
+        return res.json({
+            status: isTokenValid.status,
+            message: isTokenValid.message
+        })
+    }
+    catch (error) {
+        return res.json({
+            status: "ERROR_OCCURED",
+            message: error.message
+        })
+    }
+}
+
+module.exports = { loginController, registerController, getCurrentUserData, forgotPasswordController, resetPasswordController }
+
+// for logout functionality -> firstly delete the token and redirect/navigate to /login route
+
+// keep user logged in/ stay logged in
+// using local storage isLoggedin property 
