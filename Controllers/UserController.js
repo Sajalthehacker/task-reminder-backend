@@ -1,12 +1,22 @@
 const UserModel = require('../Models/UserModel')
 const jwt = require('jsonwebtoken')
 const bcryptjs = require('bcryptjs')
+const nodemailer = require('nodemailer')
+const EmailVerifyModel = require('../Models/EmailVerifyModel')
 
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, {
         expiresIn: "1d",
     });
 }
+
+const mailTransporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.AUTH_EMAIL,
+        pass: process.env.AUTH_PASSWORD
+    }
+});
 
 // if token is expired after 1 day then getCurrentUserData() controller will not be able to fetch the data 
 
@@ -58,8 +68,7 @@ const getCurrentUserData = async (req, res) => {
             message: error.message,
         });
     }
-};
-
+}
 
 const loginController = async (req, res) => {
     const { email, password } = req.body;
@@ -107,8 +116,7 @@ const loginController = async (req, res) => {
             message: error.message,
         });
     }
-};
-
+}
 
 const registerController = async (req, res) => {
     const { name, email, password } = req.body
@@ -138,6 +146,7 @@ const registerController = async (req, res) => {
         })
 
         if (newUser) {
+            sendOtpVerificationEmail(newUser.email)
             return res.json({
                 status: "REGISTRATION_SUCCESSFUL",
                 _id: newUser._id,
@@ -213,6 +222,10 @@ const resetPasswordController = async (req, res) => {
             }
         })
 
+        if (isTokenValid.status === "TOKEN_VALID") {
+            return res.render('index', { email: isTokenValid.message.email })
+        }
+
         return res.json({
             status: isTokenValid.status,
             message: isTokenValid.message
@@ -226,7 +239,194 @@ const resetPasswordController = async (req, res) => {
     }
 }
 
-module.exports = { loginController, registerController, getCurrentUserData, forgotPasswordController, resetPasswordController }
+const changeResetPasswordController = async (req, res) => {
+    const { id, token } = req.params
+    const { password } = req.body
+    const isUserExists = await UserModel.findOne({ _id: id });
+
+    if (!isUserExists) {
+        return res.json({
+            status: "NO_ACCOUNT_EXISTS",
+            message: "No Account Exists with this email address please enter valid email address or proceed to SignUp page"
+        })
+    }
+
+    const forgotSecret = process.env.JWT_SECRET + isUserExists.password;
+    try {
+        const isTokenValid = jwt.verify(token, forgotSecret, (err, data) => {
+            if (err) {
+                return {
+                    status: "TOKEN_EXPIRED",
+                    message: err
+                }
+            }
+            return {
+                status: "TOKEN_VALID",
+                message: data
+            }
+        })
+
+        if (isTokenValid.status === "TOKEN_VALID") {
+            const encryptedPassword = await bcryptjs.hash(password, 10);
+            UserModel.updateOne({
+                _id: isTokenValid.message.id
+            },
+                {
+                    $set: {
+                        password: encryptedPassword
+                    }
+                }
+            ).then(() => {
+                return res.json({
+                    status: "PASSWORD_CHANGED_SUCCESSFULLY",
+                })
+            }).catch(() => {
+                return res.json({
+                    status: "ERROR_IN_CHANGING_PASSWORD",
+                })
+            })
+        }
+    }
+    catch (error) {
+        return res.json({
+            status: "ERROR_OCCURED",
+            message: error.message
+        })
+    }
+}
+
+const sendOtpVerificationEmail = async (email) => {
+    try {
+        const OTP = `${Math.floor(Math.random() * 900000 + 100000)}`
+
+        const mailOptions = {
+            from: process.env.AUTH_EMAIL,
+            to: email,
+            subject: "Please Verify Your Email Address [Team DatesInfomer]",
+            html: `<p>Enter <b> ${OTP} </b> in the website and complete the Sign Up Process. the above is valid for <b> 10 minutes </b></p>`
+        }
+
+        const encryptedOTP = await bcryptjs.hash(OTP, 10)
+
+        const newEmailVerificationData = await EmailVerifyModel.create({
+            email: email,
+            otp: encryptedOTP,
+            createdAt: Date.now(),
+            expiresAt: Date.now() + 600000
+        })
+
+        await mailTransporter.sendMail(mailOptions)
+        return {
+            status: "SUCCESS",
+            message: "Message Sent SuccessFully",
+            data: {
+                email: email
+            }
+        }
+    }
+    catch (error) {
+        return {
+            status: "FAILED",
+            message: error.message
+        }
+    }
+}
+
+const verifyEmailController = async (req, res) => {
+    try {
+        const { email, otp } = req.body
+        if (!email || !otp) {
+            return res.json({
+                status: "EMPTY_CREDENTIALS",
+                message: "PLEASE ENTER VALID / NOT NULL EMAIL AND OTP"
+            })
+        }
+
+        const emailVerifyRecord = await EmailVerifyModel.findOne({ email: email })
+        if (!emailVerifyRecord) {
+            return res.json({
+                status: "EMAIL_ALREADY_VERIFIED",
+                message: "Email has been already verified or no account exists with this email please proceed to sign up of login page"
+            })
+        }
+
+        const expiresAt = emailVerifyRecord.expiresAt
+        const encryptedOTP = emailVerifyRecord.otp
+
+        if (expiresAt < Date.now()) {
+            await emailVerifyRecord.deleteMany({
+                email: email
+            })
+            return res.json({
+                status: "OTP_EXPIRED",
+                message: "The entered otp is expired please request a new otp"
+            })
+        }
+
+        const isOtpValid = await bcryptjs.compare(otp, encryptedOTP)
+
+        if (!isOtpValid) {
+            return res.json({
+                status: "INVALID_OTP",
+                message: "OTP is invalid. Please Enter Correct OTP "
+            })
+        }
+
+        else {
+            await UserModel.updateMany({ email: email }, {
+                isEmailVerified: true,
+                isLoggedIn: true
+            })
+            await EmailVerifyModel.deleteMany({ email: email })
+            const UpdatedUserDetails = await UserModel.findOne({ email: email })
+
+            return res.json({
+                status: "VERIFICATION_SUCCESSFUL",
+                message: "your email has been verified successfully you can now proceed to home page",
+                data: {
+                    name: UpdatedUserDetails.name,
+                    email: UpdatedUserDetails.email,
+                    isEmailVerified: UpdatedUserDetails.isEmailVerified,
+                    isLoggedIn: UpdatedUserDetails.isLoggedIn
+                }
+            })
+        }
+    }
+    catch (error) {
+        return res.json({
+            status: "ERROR_OCCURED",
+            message: error.message
+        })
+    }
+}
+
+const resendOtpController = async (req, res) => {
+    try {
+        const { email } = req.body
+        if (!email) {
+            return res.json({
+                status: "EMPTY_CREDENTIALS",
+                message: "PLEASE ENTER VALID / NOT NULL EMAIL"
+            })
+        }
+
+        await EmailVerifyModel.deleteMany({ email: email })
+        sendOtpVerificationEmail(email)
+
+        return res.json({
+            status: "RESENT_SUCCESSFUL",
+            message: "new otp is sent to your email successfully"
+        })
+    }
+    catch (error) {
+        return res.json({
+            status: "ERROR_OCCURED",
+            message: error.message
+        })
+    }
+}
+
+module.exports = { loginController, registerController, getCurrentUserData, forgotPasswordController, resetPasswordController, changeResetPasswordController, verifyEmailController, resendOtpController }
 
 // for logout functionality -> firstly delete the token and redirect/navigate to /login route
 

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RESET PASSWORD</title>
+
+    <style>
+        .main-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .reset-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .passW{
+            width: 16rem;
+            height: 4rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="main-container">
+        <form action="" class="reset-container" method="post">
+            <h1>
+                <%= email%>
+            </h1>
+            <input type="password" placeholder="Password" required class="passW" name="password">
+            <br>
+            <input type="password" placeholder="Confirm password" required class="cPassW" name="confirmPassword">
+            <br>
+            <button>Submit</button>
+        </form>
+    </div>
+</body>
+
+</html>
