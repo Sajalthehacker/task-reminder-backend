@@ -26,39 +26,35 @@ connectDB()
 
 app.use(express.urlencoded({ extended: true }))
 
-setInterval(() => {
-    ReminderModel.find({}, (err, reminderList) => {
-        if (err) {
-            console.log(err)
-        }
+setInterval(async () => {
+    try {
+        const reminderList = await ReminderModel.find({});
+
         if (reminderList) {
-            reminderList.forEach(reminder => {
+            for (const reminder of reminderList) {
                 if (!reminder.isReminded) {
-                    const now = new Date()
-                    if ((new Date(reminder.remindAt) - now) < 0) {
-                        ReminderModel.findByIdAndUpdate(reminder._id, { isReminded: true }, (err, remindObj) => {
-                            if (err) {
-                                console.log(err)
-                            }
+                    const now = new Date();
+                    if (new Date(reminder.remindAt) - now < 0) {
+                        await ReminderModel.findByIdAndUpdate(reminder._id, { isReminded: true });
 
-                            const mailMessage = reminder.reminderMessage
-                            const mailOptions = {
-                                from: process.env.AUTH_EMAIL,
-                                to: email,
-                                subject: "⏰⏰⏰ [Team DatesInfomer] You Have A Pending Task",
-                                html: `<p>This Email Is Concerned To remind You about the task ${mailMessage} please do it carefully thank you<p><br/> <p>Regards [TEAM DatesInfomer] </p>`
-                            }
+                        const mailMessage = reminder.reminderMessage;
+                        const mailOptions = {
+                            from: process.env.AUTH_EMAIL,
+                            to: email,
+                            subject: "⏰⏰⏰ [Team DatesInfomer] You Have A Pending Task",
+                            html: `<p>This Email Is Concerned To remind You about the task ${mailMessage} please do it carefully thank you<p><br/> <p>Regards [TEAM DatesInfomer] </p>`
+                        };
 
-                            mailTransporter.sendMail(mailOptions).then(() => {
-                                console.log('reminder send successfully on email')
-                            })
-                        })
+                        await mailTransporter.sendMail(mailOptions);
+                        console.log('reminder sent successfully on email');
                     }
                 }
-            })
+            }
         }
-    })
-}, 1000)
+    } catch (err) {
+        console.log(err);
+    }
+}, 1000);
 
 
 app.listen(PORT, () => {
