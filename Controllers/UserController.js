@@ -8,7 +8,7 @@ const path = require('path')
 
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, {
-        expiresIn: "2m",
+        expiresIn: "10s",
     });
 }
 
@@ -105,7 +105,7 @@ const loginController = async (req, res) => {
             await UserModel.findOneAndUpdate({ email: email }, { isLoggedIn: true, isEmailVerified: true });
 
             return res.json({
-                status: "LOGIN_SUCCESSFUL",
+                status: "LOGIN_SUCCESSFULL",
                 name: isUserExists.name,
                 email: isUserExists.email,
                 isEmailVerified: isUserExists.isEmailVerified,
