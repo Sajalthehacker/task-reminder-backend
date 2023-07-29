@@ -3,10 +3,12 @@ const jwt = require('jsonwebtoken')
 const bcryptjs = require('bcryptjs')
 const nodemailer = require('nodemailer')
 const EmailVerifyModel = require('../Models/EmailVerifyModel')
+const express = require('express')
+const path = require('path')
 
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, {
-        expiresIn: "1d",
+        expiresIn: "2m",
     });
 }
 
@@ -24,6 +26,12 @@ const getCurrentUserData = async (req, res) => {
     const { token } = req.body;
 
     try {
+        if (!token) {
+            return res.json({
+                status: "TOKEN_MISSING",
+                message: "No token provided in the request headers."
+            });
+        }
         const isTokenCorrect = jwt.verify(token, process.env.JWT_SECRET, (err, data) => {
             if (err) {
                 return {
@@ -133,7 +141,7 @@ const registerController = async (req, res) => {
         if (isUserAlreadyExists) {
             return res.json({
                 status: "EMAIL_ALREADY_EXISTS",
-                message: "AA account already exists with this email please try a new email or proceed to login"
+                message: "A account already exists with this email please try a new email or proceed to login"
             })
         }
 
@@ -185,8 +193,19 @@ const forgotPasswordController = async (req, res) => {
 
         const forgotPasswordLink = `http://localhost:5000/api/user/reset-password/${isUserExists._id}/${forgotToken}`
 
-        res.send(forgotPasswordLink)
+        const mailOptions = {
+            from: process.env.AUTH_EMAIL,
+            to: email,
+            subject: "Please use this link to reset your password [Team DatesInfomer]",
+            html: `<p>Click <a href="${forgotPasswordLink}"><b>Here</b></a> to reset your password. This link is valid only for 10 minutes.</p>`
+        }
 
+        await mailTransporter.sendMail(mailOptions)
+
+        return res.json({
+            status: "SUCCESSFULL",
+            message: "A link is sent to your email please use that link to reset your password Note : This link is valid only for 10 minutes"
+        })
     }
     catch (error) {
         return res.json({
@@ -223,7 +242,7 @@ const resetPasswordController = async (req, res) => {
         })
 
         if (isTokenValid.status === "TOKEN_VALID") {
-            return res.render('index', { email: isTokenValid.message.email })
+            return res.sendFile(path.join(__dirname, '../Views/index.html'))
         }
 
         return res.json({
@@ -359,7 +378,7 @@ const verifyEmailController = async (req, res) => {
             })
             return res.json({
                 status: "OTP_EXPIRED",
-                message: "The entered otp is expired please request a new otp"
+                message: "The entered otp is expired please request a new otp by clicking on resend otp"
             })
         }
 
@@ -381,7 +400,7 @@ const verifyEmailController = async (req, res) => {
             const UpdatedUserDetails = await UserModel.findOne({ email: email })
 
             return res.json({
-                status: "VERIFICATION_SUCCESSFUL",
+                status: "VERIFICATION_SUCCESSFULL",
                 message: "your email has been verified successfully you can now proceed to home page",
                 data: {
                     name: UpdatedUserDetails.name,
@@ -414,7 +433,7 @@ const resendOtpController = async (req, res) => {
         sendOtpVerificationEmail(email)
 
         return res.json({
-            status: "RESENT_SUCCESSFUL",
+            status: "RESENT_SUCCESSFULL",
             message: "new otp is sent to your email successfully"
         })
     }

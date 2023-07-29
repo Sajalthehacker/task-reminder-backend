@@ -11,7 +11,7 @@ app.use(cors())
 app.use(express.json())
 app.use('/api/user', UserRoutes);
 connectDB()
-app.set('view engine', 'ejs')
+
 app.use(express.urlencoded({ extended: true }))
 
 

@@ -7,10 +7,28 @@
     <title>RESET PASSWORD</title>
 
     <style>
+        ::-webkit-scrollbar{
+            display: none;
+        }
+
+        *{
+            padding: 0;
+            margin: 0;
+        }
+
         .main-container {
             display: flex;
             align-items: center;
             justify-content: center;
+            height: 106vh;
+            width: 100vw;
+            background-color: rgb(20, 11, 90);
+            overflow: hidden;
+        }
+
+        h1 {
+            color: white;
+            font-size: 3rem;
         }
 
         .reset-container {
@@ -19,9 +37,18 @@
             align-items: center;
             justify-content: center;
         }
-        .passW{
+
+        .passW,
+        .cPassW {
             width: 16rem;
-            height: 4rem;
+            height: 1rem;
+            padding: 1rem;
+            font-size: 1rem;
+        }
+
+        .btn{
+            height: 2rem;
+            width: 12rem;
         }
     </style>
 </head>
@@ -29,14 +56,12 @@
 <body>
     <div class="main-container">
         <form action="" class="reset-container" method="post">
-            <h1>
-                <%= email%>
-            </h1>
+            <h1>Email</h1>
             <input type="password" placeholder="Password" required class="passW" name="password">
             <br>
             <input type="password" placeholder="Confirm password" required class="cPassW" name="confirmPassword">
             <br>
-            <button>Submit</button>
+            <button class=".btn" type="submit">Change Password</button>
         </form>
     </div>
 </body>
