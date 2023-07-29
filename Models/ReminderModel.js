@@ -2,6 +2,10 @@ const mongoose = require('mongoose')
 
 const reminderSchema = new mongoose.Schema(
     {
+        email: {
+            type: "String",
+            required: true
+        },
         reminderMessage: {
             type: "String",
             required: true
