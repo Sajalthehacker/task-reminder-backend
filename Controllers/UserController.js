@@ -3,7 +3,6 @@ const jwt = require('jsonwebtoken')
 const bcryptjs = require('bcryptjs')
 const nodemailer = require('nodemailer')
 const EmailVerifyModel = require('../Models/EmailVerifyModel')
-const express = require('express')
 const path = require('path')
 
 const generateToken = (id) => {
