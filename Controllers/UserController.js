@@ -199,51 +199,6 @@ const forgotPasswordController = async (req, res) => {
     }
 }
 
-const resetPasswordController = async (req, res) => {
-    const { id, token } = req.params
-    const isUserExists = await UserModel.findOne({ _id: id });
-
-    if (!isUserExists) {
-        return res.json({
-            status: "NO_ACCOUNT_EXISTS",
-            message: "No Account Exists with this email address please enter valid email address or proceed to SignUp page"
-        })
-    }
-
-    const forgotSecret = process.env.JWT_SECRET + isUserExists.password;
-    try {
-        const isTokenValid = jwt.verify(token, forgotSecret, (err, data) => {
-            if (err) {
-                return {
-                    status: "TOKEN_EXPIRED",
-                    message: err
-                }
-            }
-            return {
-                status: "TOKEN_VALID",
-                message: data
-            }
-        })
-
-        if (isTokenValid.status === "TOKEN_VALID") {
-            return res.json({
-                status: "success"
-            })
-        }
-
-        return res.json({
-            status: isTokenValid.status,
-            message: isTokenValid.message
-        })
-    }
-    catch (error) {
-        return res.json({
-            status: "ERROR_OCCURED",
-            message: error.message
-        })
-    }
-}
-
 const changeResetPasswordController = async (req, res) => {
     const { email, password } = req.body
     const isUserExists = await UserModel.findOne({ email: email });
