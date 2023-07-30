@@ -3,7 +3,6 @@ const jwt = require('jsonwebtoken')
 const bcryptjs = require('bcryptjs')
 const nodemailer = require('nodemailer')
 const EmailVerifyModel = require('../Models/EmailVerifyModel')
-const path = require('path')
 
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -185,25 +184,11 @@ const forgotPasswordController = async (req, res) => {
             })
         }
 
-        const forgotSecret = process.env.JWT_SECRET + isUserExists.password;
-        const forgotToken = jwt.sign({ email: isUserExists.email, id: isUserExists._id }, forgotSecret, {
-            expiresIn: "10m"
-        })
-
-        const forgotPasswordLink = `http://localhost:5000/api/user/reset-password/${isUserExists._id}/${forgotToken}`
-
-        const mailOptions = {
-            from: process.env.AUTH_EMAIL,
-            to: email,
-            subject: "Please use this link to reset your password [Team DatesInfomer]",
-            html: `<p>Click <a href="${forgotPasswordLink}"><b>Here</b></a> to reset your password. This link is valid only for 10 minutes.</p>`
-        }
-
-        await mailTransporter.sendMail(mailOptions)
+        await sendOtpVerificationEmail(email)
 
         return res.json({
             status: "SUCCESSFULL",
-            message: "A link is sent to your email please use that link to reset your password Note : This link is valid only for 10 minutes"
+            message: "A Otp is sent to your email address please use it to verify your email Note : This otp is valid only for 10 minutes"
         })
     }
     catch (error) {
@@ -241,7 +226,9 @@ const resetPasswordController = async (req, res) => {
         })
 
         if (isTokenValid.status === "TOKEN_VALID") {
-            return res.sendFile(path.join(__dirname, '../Views/index.html'))
+            return res.json({
+                status: "success"
+            })
         }
 
         return res.json({
@@ -258,9 +245,8 @@ const resetPasswordController = async (req, res) => {
 }
 
 const changeResetPasswordController = async (req, res) => {
-    const { id, token } = req.params
-    const { password } = req.body
-    const isUserExists = await UserModel.findOne({ _id: id });
+    const { email, password } = req.body
+    const isUserExists = await UserModel.findOne({ email: email });
 
     if (!isUserExists) {
         return res.json({
@@ -269,41 +255,27 @@ const changeResetPasswordController = async (req, res) => {
         })
     }
 
-    const forgotSecret = process.env.JWT_SECRET + isUserExists.password;
     try {
-        const isTokenValid = jwt.verify(token, forgotSecret, (err, data) => {
-            if (err) {
-                return {
-                    status: "TOKEN_EXPIRED",
-                    message: err
+        const encryptedPassword = await bcryptjs.hash(password, 10);
+        UserModel.updateOne({
+            email: email
+        },
+            {
+                $set: {
+                    password: encryptedPassword
                 }
             }
-            return {
-                status: "TOKEN_VALID",
-                message: data
-            }
-        })
-
-        if (isTokenValid.status === "TOKEN_VALID") {
-            const encryptedPassword = await bcryptjs.hash(password, 10);
-            UserModel.updateOne({
-                _id: isTokenValid.message.id
-            },
-                {
-                    $set: {
-                        password: encryptedPassword
-                    }
-                }
-            ).then(() => {
-                return res.json({
-                    status: "PASSWORD_CHANGED_SUCCESSFULLY",
-                })
-            }).catch(() => {
-                return res.json({
-                    status: "ERROR_IN_CHANGING_PASSWORD",
-                })
+        ).then(() => {
+            return res.json({
+                status: "PASSWORD_CHANGED_SUCCESSFULLY",
+                message: "your password is changes successfully is our database and you can now proceed to login page "
             })
-        }
+        }).catch(() => {
+            return res.json({
+                status: "ERROR_IN_CHANGING_PASSWORD",
+                message: "some error in changing the password please try after some time"
+            })
+        })
     }
     catch (error) {
         return res.json({
@@ -444,7 +416,69 @@ const resendOtpController = async (req, res) => {
     }
 }
 
-module.exports = { loginController, registerController, getCurrentUserData, forgotPasswordController, resetPasswordController, changeResetPasswordController, verifyEmailController, resendOtpController }
+const verifyEmailResetController = async (req, res) => {
+    try {
+        const { email, otp } = req.body
+        if (!email || !otp) {
+            return res.json({
+                status: "EMPTY_CREDENTIALS",
+                message: "PLEASE ENTER VALID / NOT NULL EMAIL AND OTP"
+            })
+        }
+
+        const emailVerifyRecord = await EmailVerifyModel.findOne({ email: email })
+        if (!emailVerifyRecord) {
+            return res.json({
+                status: "EMAIL_ALREADY_VERIFIED",
+                message: "Email has been already verified or no account exists with this email please proceed to sign up of login page"
+            })
+        }
+
+        const expiresAt = emailVerifyRecord.expiresAt
+        const encryptedOTP = emailVerifyRecord.otp
+
+        if (expiresAt < Date.now()) {
+            await EmailVerifyModel.deleteMany({
+                email: email
+            })
+            return res.json({
+                status: "OTP_EXPIRED",
+                message: "The entered otp is expired please request a new otp by clicking on resend otp"
+            })
+        }
+
+        const isOtpValid = await bcryptjs.compare(otp, encryptedOTP)
+
+        if (!isOtpValid) {
+            return res.json({
+                status: "INVALID_OTP",
+                message: "OTP is invalid. Please Enter Correct OTP "
+            })
+        }
+
+        else {
+            await EmailVerifyModel.deleteMany({ email: email })
+            const UpdatedUserDetails = await UserModel.findOne({ email: email })
+
+            return res.json({
+                status: "VERIFICATION_SUCCESSFULL",
+                message: "your email has been verified successfully you can now proceed to reset your password",
+                data: {
+                    name: UpdatedUserDetails.name,
+                    email: UpdatedUserDetails.email
+                }
+            })
+        }
+    }
+    catch (error) {
+        return res.json({
+            status: "ERROR_OCCURED",
+            message: error.message
+        })
+    }
+}
+
+module.exports = { loginController, registerController, getCurrentUserData, forgotPasswordController, resetPasswordController, changeResetPasswordController, verifyEmailController, resendOtpController, verifyEmailResetController }
 
 // for logout functionality -> firstly delete the token and redirect/navigate to /login route
 
