@@ -433,7 +433,7 @@ const verifyEmailResetController = async (req, res) => {
     }
 }
 
-module.exports = { loginController, registerController, getCurrentUserData, forgotPasswordController, resetPasswordController, changeResetPasswordController, verifyEmailController, resendOtpController, verifyEmailResetController }
+module.exports = { loginController, registerController, getCurrentUserData, forgotPasswordController, changeResetPasswordController, verifyEmailController, resendOtpController, verifyEmailResetController }
 
 // for logout functionality -> firstly delete the token and redirect/navigate to /login route
 
