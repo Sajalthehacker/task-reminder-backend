@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken')
 const bcryptjs = require('bcryptjs')
 const nodemailer = require('nodemailer')
 const EmailVerifyModel = require('../Models/EmailVerifyModel')
+const ReminderModel = require('../Models/ReminderModel')
 
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -153,6 +154,7 @@ const registerController = async (req, res) => {
 
         if (newUser) {
             sendOtpVerificationEmail(newUser.email)
+            const token = generateToken(newUser._id);
             return res.json({
                 status: "REGISTRATION_SUCCESSFUL",
                 _id: newUser._id,
@@ -160,6 +162,7 @@ const registerController = async (req, res) => {
                 email: newUser.email,
                 isEmailVerified: newUser.isEmailVerified,
                 isLoggedIn: newUser.isLoggedIn,
+                token: token,
             })
         }
     }
@@ -433,7 +436,87 @@ const verifyEmailResetController = async (req, res) => {
     }
 }
 
-module.exports = { loginController, registerController, getCurrentUserData, forgotPasswordController, changeResetPasswordController, verifyEmailController, resendOtpController, verifyEmailResetController }
+const logOutController = async (req, res) => {
+    const { email } = req.body;
+
+    if (!email) {
+        return res.json({
+            status: "EMPTY_CREDENTIALS",
+            message: "Please enter a valid email.",
+        });
+    }
+
+    try {
+        const isUserAlreadyExists = await UserModel.findOne({ email });
+
+        if (!isUserAlreadyExists) {
+            return res.json({
+                status: "NO_ACCOUNT_EXIST",
+                message:"Sorry! No account exists with the provided email address"
+            })
+        }
+
+        // if user exists
+        UserModel.updateOne({ email: email }, {
+            $set: {
+                isLoggedIn: false
+            }
+        }).then(() => {
+            return res.json({
+                status: "LOGOUT_SUCCESS",
+                message: "user logged out successfully"
+            })
+        }).catch((err) => {
+            return res.json({
+                status: "LOGOUT_FAILURE",
+                message: err.message
+            })
+        })
+    }
+    catch (error) {
+        return res.json({
+            status: "ERROR_OCCURED",
+            message: error.message
+        })
+    }
+}
+
+const deleteUserController = async (req, res) => {
+    const { email } = req.body; 
+
+    if (!email) {
+        return res.json({
+            status: "INVALID_REQUEST",
+            message: "Please provide an email to delete the user"
+        });
+    }
+
+    try {
+        // Delete user from UserModel
+        const isUserExists = await UserModel.findOne({ email: email});
+        if (isUserExists){
+            await UserModel.deleteOne({ email: email });
+        }
+        
+        // Delete user's reminders from ReminderModel
+        const isReminderExists = await ReminderModel.findOne({ email: email});
+        if(isReminderExists){
+            await ReminderModel.deleteMany({ email: email });
+        }
+        return res.json({
+            status: "USER_DELETED_SUCCESSFULLY",
+            message: "User and associated data deleted successfully"
+        });
+    } catch (err) {
+        console.log(err);
+        return res.json({
+            status: "ERROR_OCCURED",
+            message: err.message
+        });
+    }
+};
+
+module.exports = { loginController, registerController, getCurrentUserData, forgotPasswordController, changeResetPasswordController, verifyEmailController, resendOtpController, verifyEmailResetController, logOutController, deleteUserController }
 
 // for logout functionality -> firstly delete the token and redirect/navigate to /login route
 
