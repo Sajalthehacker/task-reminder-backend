@@ -102,13 +102,14 @@ const loginController = async (req, res) => {
         if (isPasswordCorrect) {
             const token = generateToken(isUserExists._id);
             await UserModel.findOneAndUpdate({ email: email }, { isLoggedIn: true, isEmailVerified: true });
-
+            const v1 = true;
+            
             return res.json({
                 status: "LOGIN_SUCCESSFULL",
                 name: isUserExists.name,
                 email: isUserExists.email,
                 isEmailVerified: isUserExists.isEmailVerified,
-                isLoggedIn: isUserExists.isLoggedIn,
+                isLoggedIn: v1,
                 token: token,
             });
         } else {
@@ -154,7 +155,6 @@ const registerController = async (req, res) => {
 
         if (newUser) {
             sendOtpVerificationEmail(newUser.email)
-            const token = generateToken(newUser._id);
             return res.json({
                 status: "REGISTRATION_SUCCESSFUL",
                 _id: newUser._id,
@@ -162,7 +162,6 @@ const registerController = async (req, res) => {
                 email: newUser.email,
                 isEmailVerified: newUser.isEmailVerified,
                 isLoggedIn: newUser.isLoggedIn,
-                token: token,
             })
         }
     }
